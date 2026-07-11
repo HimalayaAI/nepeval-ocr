@@ -1,0 +1,41 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "nepeval-ocr"
+version = "0.1.0"
+description = "Standalone benchmarking project for evaluating OCR/VLM models on the Nepali Pixel dataset."
+readme = "README.md"
+requires-python = ">=3.9"
+dependencies = [
+    "datasets",
+    "Pillow",
+    "requests",
+]
+
+[project.optional-dependencies]
+tesseract = [
+    "pytesseract",
+]
+easyocr = [
+    "easyocr",
+    "torch",
+    "torchvision",
+]
+paddle = [
+    "paddlepaddle",
+    "paddleocr",
+]
+hf = [
+    "transformers",
+    "torch",
+]
+eval = [
+    "pytesseract",
+]
+
+[project.scripts]
+nepeval-ocr-tesseract = "scripts.run_tesseract_benchmark:main"
+nepeval-ocr-api = "scripts.run_openai_compatible_api_benchmarks:main"
+nepeval-ocr-summary = "scripts.summarize_ocr_results:main"
