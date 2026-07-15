@@ -413,38 +413,22 @@ from surya.model.recognition.processor import load_processor as load_rec_process
 
 import copy
 
+def replace_in_cells(nb, old, new):
+    for cell in nb["cells"]:
+        if "source" in cell:
+            for i, line in enumerate(cell["source"]):
+                if old in line:
+                    cell["source"][i] = line.replace(old, new)
+
 for config in configs:
-    nb = json.dumps(base_notebook)
-    
-    # Simple string replacement for the placeholders inside the JSON structure
-    # Note: we need to replace it carefully. The easiest way is to convert to string, replace, convert back.
-    # Since some replacements might have newlines, we should insert them in a way that respects JSON list of strings format,
-    # OR we can just replace the placeholders in a Python dict before JSON dumping. Let's do that!
-    
     nb_obj = copy.deepcopy(base_notebook)
     
-    # 0. Markdown NAME
-    nb_obj["cells"][0]["source"][0] = nb_obj["cells"][0]["source"][0].replace("{NAME}", config["NAME"])
-    nb_obj["cells"][0]["source"][2] = nb_obj["cells"][0]["source"][2].replace("{NAME}", config["NAME"])
-    
-    # 1. Install deps
-    nb_obj["cells"][1]["source"][1] = config["INSTALL_DEPS"]
-    
-    # 2. Extra imports
-    nb_obj["cells"][2]["source"][14] = config["EXTRA_IMPORTS"] + "\\n"
-    
-    # 4. Adapter Code
-    nb_obj["cells"][4]["source"][1] = config["ADAPTER_CODE"] + "\\n"
-    
-    # 5. Name lower in paths
-    nb_obj["cells"][5]["source"][7] = nb_obj["cells"][5]["source"][7].replace("{NAME.lower()}", config["NAME"].lower())
-    nb_obj["cells"][5]["source"][8] = nb_obj["cells"][5]["source"][8].replace("{NAME.lower()}", config["NAME"].lower())
-    
-    # 6. Name lower in helpers
-    nb_obj["cells"][6]["source"][6] = nb_obj["cells"][6]["source"][6].replace("{NAME.lower()}", config["NAME"].lower())
-    
-    # 8. Adapter Init
-    nb_obj["cells"][8]["source"][1] = f"adapter = {config['ADAPTER_INIT']}\\n"
+    replace_in_cells(nb_obj, "{NAME}", config["NAME"])
+    replace_in_cells(nb_obj, "{NAME.lower()}", config["NAME"].lower())
+    replace_in_cells(nb_obj, "{INSTALL_DEPS}", config["INSTALL_DEPS"])
+    replace_in_cells(nb_obj, "{EXTRA_IMPORTS}", config["EXTRA_IMPORTS"])
+    replace_in_cells(nb_obj, "{ADAPTER_CODE}", config["ADAPTER_CODE"])
+    replace_in_cells(nb_obj, "{ADAPTER_INIT}", config["ADAPTER_INIT"])
     
     # Write file
     with open(config["FILENAME"], 'w') as f:
