@@ -2,11 +2,13 @@
 """Run Nepali Pixel OCR benchmark against an OpenAI-compatible API."""
 
 import argparse
+import collections
 import concurrent.futures
 import json
 import os
 import requests
 import statistics
+import sys
 import time
 from datetime import datetime, timezone
 from pathlib import Path
@@ -115,6 +117,24 @@ def run_model(model: str, items: list, output_dir: Path, args, token: str) -> di
         temperature=args.temperature
     )
     
+    # ── Pre-flight check ─────────────────────────────────────────────
+    # Run the first sample synchronously to catch adapter-level failures
+    # (bad API key, unreachable endpoint, wrong model, etc.) before
+    # grinding through the entire dataset.
+    if items:
+        print(f"Pre-flight: testing {model} on first sample...", flush=True)
+        preflight = evaluate_one(items[0], adapter)
+        if not preflight["ok"]:
+            print(
+                f"\n✗ Pre-flight check FAILED for {model}.\n"
+                f"  Error: {preflight['error']}\n"
+                f"  The adapter appears to be broken — aborting before "
+                f"processing {len(items)} samples.",
+                file=sys.stderr,
+            )
+            sys.exit(1)
+        print(f"Pre-flight: OK", flush=True)
+    
     samples = []
     started_at = datetime.now(timezone.utc).isoformat()
     
@@ -140,6 +160,29 @@ def run_model(model: str, items: list, output_dir: Path, args, token: str) -> di
 
     valid_samples = [s for s in samples if s["ok"]]
     errored_completions = len(samples) - len(valid_samples)
+    
+    # ── Post-run guard ───────────────────────────────────────────────
+    # If a majority of samples failed, the adapter/environment is
+    # likely broken.  Abort loudly instead of writing a misleading
+    # summary.json with null metrics.
+    if samples and (errored_completions / len(samples)) > 0.5:
+        error_counts = collections.Counter(
+            s["error"] for s in samples if not s["ok"]
+        )
+        print(
+            f"\n✗ Run ABORTED for {model}: "
+            f"{errored_completions}/{len(samples)} samples errored "
+            f"({errored_completions / len(samples):.0%}).\n"
+            f"  Distinct errors ({len(error_counts)}):",
+            file=sys.stderr,
+        )
+        for msg, count in error_counts.most_common():
+            print(f"    [{count}x] {msg}", file=sys.stderr)
+        print(
+            f"\n  Not writing summary.json — fix the adapter and re-run.",
+            file=sys.stderr,
+        )
+        sys.exit(1)
     
     summary = {
         "model": model,

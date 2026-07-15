@@ -2,9 +2,11 @@
 """Run Nepali Pixel OCR benchmark against Tesseract."""
 
 import argparse
+import collections
 import concurrent.futures
 import json
 import statistics
+import sys
 import time
 from datetime import datetime, timezone
 from pathlib import Path
@@ -82,6 +84,24 @@ def main():
     # Needs a fresh adapter per thread/process if not thread safe, but pytesseract spawns subprocesses so it's fine.
     adapter = TesseractAdapter(lang=args.lang)
     
+    # ── Pre-flight check ─────────────────────────────────────────────
+    # Run the first sample synchronously to catch adapter-level failures
+    # (missing binaries, bad lang packs, etc.) before grinding through
+    # the entire dataset.
+    if items:
+        print(f"Pre-flight: testing adapter on first sample...", flush=True)
+        preflight = evaluate_one(items[0], adapter)
+        if not preflight["ok"]:
+            print(
+                f"\n✗ Pre-flight check FAILED for {model_name}.\n"
+                f"  Error: {preflight['error']}\n"
+                f"  The adapter appears to be broken — aborting before "
+                f"processing {len(items)} samples.",
+                file=sys.stderr,
+            )
+            sys.exit(1)
+        print(f"Pre-flight: OK", flush=True)
+    
     samples = []
     started_at = datetime.now(timezone.utc).isoformat()
     
@@ -108,6 +128,29 @@ def main():
     # Summarize
     valid_samples = [s for s in samples if s["ok"]]
     errored_completions = len(samples) - len(valid_samples)
+    
+    # ── Post-run guard ───────────────────────────────────────────────
+    # If a majority of samples failed, the adapter/environment is
+    # likely broken.  Abort loudly instead of writing a misleading
+    # summary.json with null metrics.
+    if samples and (errored_completions / len(samples)) > 0.5:
+        error_counts = collections.Counter(
+            s["error"] for s in samples if not s["ok"]
+        )
+        print(
+            f"\n✗ Run ABORTED for {model_name}: "
+            f"{errored_completions}/{len(samples)} samples errored "
+            f"({errored_completions / len(samples):.0%}).\n"
+            f"  Distinct errors ({len(error_counts)}):",
+            file=sys.stderr,
+        )
+        for msg, count in error_counts.most_common():
+            print(f"    [{count}x] {msg}", file=sys.stderr)
+        print(
+            f"\n  Not writing summary.json — fix the adapter and re-run.",
+            file=sys.stderr,
+        )
+        sys.exit(1)
     
     summary = {
         "model": model_name,

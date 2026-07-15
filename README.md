@@ -21,8 +21,27 @@ Because Tesseract, EasyOCR, PaddleOCR, and Hugging Face transformers have confli
 For Tesseract:
 ```bash
 python -m pip install -e '.[tesseract]'
-# You must also install tesseract binaries via apt:
-# sudo apt install tesseract-ocr tesseract-ocr-nep
+```
+
+You also need the Tesseract binary and the **Nepali trained-data file** (`nep.traineddata`).
+
+Install the binary and language pack via your system package manager:
+```bash
+# Debian / Ubuntu
+sudo apt install tesseract-ocr tesseract-ocr-nep
+
+# Arch Linux
+sudo pacman -S tesseract tesseract-data-nep
+```
+
+Alternatively, a copy of `nep.traineddata` is bundled in the repo root.
+Copy it to your system tessdata directory, or point `TESSDATA_PREFIX` at the repo:
+```bash
+# Option 1: copy to system tessdata (find the path with `tesseract --list-langs`)
+sudo cp nep.traineddata /usr/share/tessdata/
+
+# Option 2: use TESSDATA_PREFIX (no sudo needed)
+export TESSDATA_PREFIX="$(pwd)"
 ```
 
 For API VLMs:
