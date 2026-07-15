@@ -150,7 +150,6 @@ base_notebook = {
    "outputs": [],
    "source": [
     "# 5. Configuration\n",
-    "CONCURRENCY = 2 # Reduced for GPU OCR to avoid OOM\n",
     "LIMIT = None # Set to an integer (e.g., 50) for a quick smoke-test\n",
     "\n",
     "def timestamp() -> str:\n",
@@ -216,61 +215,43 @@ base_notebook = {
    "metadata": {},
    "outputs": [],
    "source": [
-    "# 7. Load Dataset\n",
-    "print(\"Loading dataset from Hugging Face...\")\n",
+    "# 7. Run Benchmark\n",
+    "print(\"Initializing Dataset & Adapter...\")\n",
     "dataset_gen = load_nepali_pixel_dataset(split=\"train\")\n",
-    "items = []\n",
-    "for i, item in enumerate(dataset_gen):\n",
-    "    if LIMIT and i >= LIMIT:\n",
-    "        break\n",
-    "    items.append(item)\n",
-    "    \n",
-    "print(f\"Loaded {len(items)} items for benchmarking.\")"
-   ]
-  },
-  {
-   "cell_type": "code",
-   "execution_count": None,
-   "metadata": {},
-   "outputs": [],
-   "source": [
-    "# 8. Run Benchmark\n",
     "adapter = {ADAPTER_INIT}\n",
-    "\n",
-    "# Pre-flight check\n",
-    "if items:\n",
-    "    print(\"Pre-flight: testing adapter on first sample...\", flush=True)\n",
-    "    preflight = evaluate_one(items[0], adapter)\n",
-    "    if not preflight[\"ok\"]:\n",
-    "        print(f\"\\n✗ Pre-flight check FAILED.\\nError: {preflight['error']}\\nAborting.\")\n",
-    "        sys.exit(1)\n",
-    "    print(\"Pre-flight: OK\", flush=True)\n",
     "\n",
     "samples = []\n",
     "started_at = datetime.now(timezone.utc).isoformat()\n",
+    "completed = 0\n",
+    "errored = 0\n",
     "\n",
-    "print(f\"Starting benchmark with {CONCURRENCY} workers...\")\n",
-    "with concurrent.futures.ThreadPoolExecutor(max_workers=CONCURRENCY) as executor:\n",
-    "    futures = [executor.submit(evaluate_one, item, adapter) for item in items]\n",
-    "    with samples_path.open(\"w\", encoding=\"utf-8\") as samples_handle:\n",
-    "        for completed, future in enumerate(concurrent.futures.as_completed(futures), start=1):\n",
-    "            sample = future.result()\n",
-    "            samples.append(sample)\n",
-    "            append_jsonl(samples_handle, sample)\n",
+    "print(\"Starting sequential evaluation to conserve memory...\", flush=True)\n",
+    "with samples_path.open(\"w\", encoding=\"utf-8\") as samples_handle:\n",
+    "    for i, item in enumerate(dataset_gen):\n",
+    "        if LIMIT and i >= LIMIT:\n",
+    "            break\n",
+    "        \n",
+    "        # Execute\n",
+    "        sample = evaluate_one(item, adapter)\n",
+    "        samples.append(sample)\n",
+    "        append_jsonl(samples_handle, sample)\n",
+    "        \n",
+    "        completed += 1\n",
+    "        if not sample[\"ok\"]:\n",
+    "            errored += 1\n",
     "            \n",
-    "            if completed % 25 == 0 or completed == len(futures):\n",
-    "                progress = {\n",
-    "                    \"model\": model_name,\n",
-    "                    \"completed_completions\": completed,\n",
-    "                    \"total_completions\": len(futures),\n",
-    "                    \"errored_completions\": sum(1 for item in samples if not item[\"ok\"]),\n",
-    "                    \"updated_at\": datetime.now(timezone.utc).isoformat(),\n",
-    "                }\n",
-    "                with progress_path.open(\"w\") as f:\n",
-    "                    json.dump(progress, f)\n",
-    "                print(f\"\\rProgress: {completed}/{len(futures)} completions\", end=\"\", flush=True)\n",
+    "        if completed % 25 == 0:\n",
+    "            progress = {\n",
+    "                \"model\": model_name,\n",
+    "                \"completed_completions\": completed,\n",
+    "                \"errored_completions\": errored,\n",
+    "                \"updated_at\": datetime.now(timezone.utc).isoformat(),\n",
+    "            }\n",
+    "            with progress_path.open(\"w\") as f:\n",
+    "                json.dump(progress, f)\n",
+    "            print(f\"\\rProgress: {completed} completions processed (Errors: {errored})\", end=\"\", flush=True)\n",
     "\n",
-    "print(\"\\nBenchmark finished!\")"
+    "print(f\"\\nBenchmark finished! Processed {completed} items.\")"
    ]
   },
   {
@@ -279,7 +260,7 @@ base_notebook = {
    "metadata": {},
    "outputs": [],
    "source": [
-    "# 9. Summarize Results\n",
+    "# 8. Summarize Results\n",
     "valid_samples = [s for s in samples if s[\"ok\"]]\n",
     "errored_completions = len(samples) - len(valid_samples)\n",
     "\n",
@@ -408,6 +389,20 @@ from surya.model.recognition.processor import load_processor as load_rec_process
         return " ".join([line.text for line in predictions[0].text_lines])
 ''',
         "ADAPTER_INIT": 'SuryaAdapter()'
+    },
+    {
+        "NAME": "Tesseract",
+        "FILENAME": "tesseract_gpu.ipynb",
+        "INSTALL_DEPS": "!apt-get update\\n!apt-get install -y tesseract-ocr tesseract-ocr-nep\\n!pip install pytesseract datasets Pillow",
+        "EXTRA_IMPORTS": "import pytesseract",
+        "ADAPTER_CODE": '''class TesseractAdapter:
+    def __init__(self, lang: str = "nep"):
+        self.lang = lang
+        
+    def evaluate_sample(self, image: Image) -> str:
+        return pytesseract.image_to_string(image, lang=self.lang).strip()
+''',
+        "ADAPTER_INIT": 'TesseractAdapter()'
     }
 ]
 
