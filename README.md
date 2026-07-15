@@ -34,11 +34,12 @@ sudo apt install tesseract-ocr tesseract-ocr-nep
 sudo pacman -S tesseract tesseract-data-nep
 ```
 
-Alternatively, a copy of `nep.traineddata` is bundled in the repo root.
-Copy it to your system tessdata directory, or point `TESSDATA_PREFIX` at the repo:
+Alternatively, a copy of `nep.traineddata` is bundled in the `tessdata/` directory of this repo.
+Copy it to your system tessdata directory, or point `TESSDATA_PREFIX` at the repo root
+(Tesseract automatically appends `/tessdata/` to the prefix):
 ```bash
 # Option 1: copy to system tessdata (find the path with `tesseract --list-langs`)
-sudo cp nep.traineddata /usr/share/tessdata/
+sudo cp tessdata/nep.traineddata /usr/share/tessdata/
 
 # Option 2: use TESSDATA_PREFIX (no sudo needed)
 export TESSDATA_PREFIX="$(pwd)"
