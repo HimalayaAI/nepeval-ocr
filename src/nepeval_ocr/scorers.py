@@ -1,3 +1,6 @@
+import re
+import string
+from difflib import SequenceMatcher
 from typing import List, Sequence
 
 def levenshtein_distance(ref: Sequence, hyp: Sequence) -> int:
@@ -45,9 +48,46 @@ def exact_match(reference: str, hypothesis: str) -> bool:
     """Exact Match: True if strings match exactly."""
     return reference == hypothesis
 
+def normalize_text(text: str) -> str:
+    """Lower text and remove punctuation and extra whitespace for robust matching."""
+    text = text.lower()
+    text = text.translate(str.maketrans('', '', string.punctuation))
+    text = re.sub(r'\s+', ' ', text).strip()
+    return text
+
+def normalized_exact_match(reference: str, hypothesis: str) -> bool:
+    """True if strings match after case-folding and punctuation/whitespace removal."""
+    return normalize_text(reference) == normalize_text(hypothesis)
+
+def length_ratio(reference: str, hypothesis: str) -> float:
+    """Ratio of hypothesis length to reference length. Helps detect truncation or hallucination."""
+    if not reference:
+        return 1.0 if not hypothesis else float('inf')
+    return len(hypothesis) / len(reference)
+
+def char_f1_score(reference: str, hypothesis: str) -> float:
+    """Compute character-level F1 score based on longest contiguous matching subsequences."""
+    if not reference and not hypothesis:
+        return 1.0
+    if not reference or not hypothesis:
+        return 0.0
+    
+    sm = SequenceMatcher(None, reference, hypothesis)
+    match_size = sum(m.size for m in sm.get_matching_blocks())
+    
+    precision = match_size / len(hypothesis) if len(hypothesis) > 0 else 0
+    recall = match_size / len(reference) if len(reference) > 0 else 0
+    
+    if precision + recall == 0:
+        return 0.0
+    return 2 * (precision * recall) / (precision + recall)
+
 def compute_metrics(reference: str, hypothesis: str) -> dict:
     return {
         "cer": character_error_rate(reference, hypothesis),
         "wer": word_error_rate(reference, hypothesis),
-        "exact_match": exact_match(reference, hypothesis)
+        "exact_match": exact_match(reference, hypothesis),
+        "normalized_exact_match": normalized_exact_match(reference, hypothesis),
+        "char_f1": char_f1_score(reference, hypothesis),
+        "length_ratio": length_ratio(reference, hypothesis)
     }

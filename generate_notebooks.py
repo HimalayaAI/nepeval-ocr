@@ -1,32 +1,31 @@
-{
+import json
+
+base_notebook = {
  "cells": [
   {
    "cell_type": "markdown",
    "metadata": {},
    "source": [
-    "# Tesseract OCR Benchmark (Self-Contained for Colab)\n",
+    "# {NAME} OCR Benchmark (Self-Contained for Colab)\n",
     "\n",
-    "This notebook runs the full Tesseract benchmark on the Nepali Pixel dataset.\n",
+    "This notebook runs the full {NAME} benchmark on the Nepali Pixel dataset.\n",
     "It is completely self-contained (no local imports required) so you can run it directly in Google Colab.\n",
-    "\n",
-    "*(Note on GPU: As discussed, Tesseract inherently relies on CPU-based optimizations. If you require GPU acceleration, consider EasyOCR, Surya, or PaddleOCR models.)*"
+    "Ensure you have enabled a GPU runtime in Colab for optimal performance."
    ]
   },
   {
    "cell_type": "code",
-   "execution_count": null,
+   "execution_count": None,
    "metadata": {},
    "outputs": [],
    "source": [
     "# 1. Install System Dependencies and Python Libraries\n",
-    "!apt-get update\n",
-    "!apt-get install -y tesseract-ocr tesseract-ocr-nep\n",
-    "!pip install pytesseract datasets Pillow"
+    "{INSTALL_DEPS}"
    ]
   },
   {
    "cell_type": "code",
-   "execution_count": null,
+   "execution_count": None,
    "metadata": {},
    "outputs": [],
    "source": [
@@ -45,14 +44,15 @@
     "from difflib import SequenceMatcher\n",
     "from typing import Any, Dict, Iterator, Tuple, Sequence\n",
     "\n",
-    "import pytesseract\n",
+    "{EXTRA_IMPORTS}\n",
     "from datasets import load_dataset\n",
-    "from PIL.Image import Image"
+    "from PIL.Image import Image\n",
+    "import numpy as np"
    ]
   },
   {
    "cell_type": "code",
-   "execution_count": null,
+   "execution_count": None,
    "metadata": {},
    "outputs": [],
    "source": [
@@ -120,18 +120,12 @@
   },
   {
    "cell_type": "code",
-   "execution_count": null,
+   "execution_count": None,
    "metadata": {},
    "outputs": [],
    "source": [
     "# 4. Adapter & Dataset Setup\n",
-    "class TesseractAdapter:\n",
-    "    def __init__(self, lang: str = \"nep\"):\n",
-    "        self.lang = lang\n",
-    "\n",
-    "    def evaluate_sample(self, image: Image) -> str:\n",
-    "        return pytesseract.image_to_string(image, lang=self.lang).strip()\n",
-    "\n",
+    "{ADAPTER_CODE}\n",
     "def load_nepali_pixel_dataset(split: str = \"train\") -> Iterator[Tuple[str, Image, str, Dict[str, Any]]]:\n",
     "    dataset = load_dataset(\"himalaya-ai/nepalipixel-synthetic-ocr-benchmark\", split=split)\n",
     "    for row in dataset:\n",
@@ -151,20 +145,19 @@
   },
   {
    "cell_type": "code",
-   "execution_count": null,
+   "execution_count": None,
    "metadata": {},
    "outputs": [],
    "source": [
     "# 5. Configuration\n",
-    "LANG = \"nep\"\n",
-    "CONCURRENCY = 4\n",
+    "CONCURRENCY = 2 # Reduced for GPU OCR to avoid OOM\n",
     "LIMIT = None # Set to an integer (e.g., 50) for a quick smoke-test\n",
     "\n",
     "def timestamp() -> str:\n",
     "    return datetime.now(timezone.utc).strftime(\"%Y%m%dT%H%M%SZ\")\n",
     "\n",
-    "output_dir = Path(f\"results/tesseract_run_notebook_{timestamp()}\")\n",
-    "model_name = f\"tesseract-{LANG}\"\n",
+    "output_dir = Path(f\"results/{NAME.lower()}_run_notebook_{timestamp()}\")\n",
+    "model_name = \"{NAME.lower()}\"\n",
     "model_dir = output_dir / \"models\" / model_name\n",
     "model_dir.mkdir(parents=True, exist_ok=True)\n",
     "\n",
@@ -176,7 +169,7 @@
   },
   {
    "cell_type": "code",
-   "execution_count": null,
+   "execution_count": None,
    "metadata": {},
    "outputs": [],
    "source": [
@@ -187,7 +180,7 @@
     "        \"sample_id\": sample_id,\n",
     "        \"ground_truth\": ground_truth,\n",
     "        \"metadata\": metadata,\n",
-    "        \"model\": f\"tesseract-{adapter.lang}\"\n",
+    "        \"model\": \"{NAME.lower()}\"\n",
     "    }\n",
     "    \n",
     "    started = time.perf_counter()\n",
@@ -219,7 +212,7 @@
   },
   {
    "cell_type": "code",
-   "execution_count": null,
+   "execution_count": None,
    "metadata": {},
    "outputs": [],
    "source": [
@@ -237,12 +230,12 @@
   },
   {
    "cell_type": "code",
-   "execution_count": null,
+   "execution_count": None,
    "metadata": {},
    "outputs": [],
    "source": [
     "# 8. Run Benchmark\n",
-    "adapter = TesseractAdapter(lang=LANG)\n",
+    "adapter = {ADAPTER_INIT}\n",
     "\n",
     "# Pre-flight check\n",
     "if items:\n",
@@ -282,7 +275,7 @@
   },
   {
    "cell_type": "code",
-   "execution_count": null,
+   "execution_count": None,
    "metadata": {},
    "outputs": [],
    "source": [
@@ -339,18 +332,122 @@
    "name": "python3"
   },
   "language_info": {
-   "codemirror_mode": {
-    "name": "ipython",
-    "version": 3
-   },
-   "file_extension": ".py",
-   "mimetype": "text/x-python",
    "name": "python",
-   "nbconvert_exporter": "python",
-   "pygments_lexer": "ipython3",
-   "version": "3.8.0"
+   "version": "3.10.12"
   }
  },
  "nbformat": 4,
  "nbformat_minor": 4
 }
+
+
+configs = [
+    {
+        "NAME": "EasyOCR",
+        "FILENAME": "easyocr_gpu.ipynb",
+        "INSTALL_DEPS": "!pip install easyocr datasets Pillow",
+        "EXTRA_IMPORTS": "import easyocr",
+        "ADAPTER_CODE": '''class EasyOCRAdapter:
+    def __init__(self, langs: list = ["ne", "en"]):
+        self.reader = easyocr.Reader(langs, gpu=True)
+        
+    def evaluate_sample(self, image: Image) -> str:
+        img_np = np.array(image.convert('RGB'))
+        results = self.reader.readtext(img_np)
+        return " ".join([res[1] for res in results])
+''',
+        "ADAPTER_INIT": 'EasyOCRAdapter()'
+    },
+    {
+        "NAME": "PaddleOCR",
+        "FILENAME": "paddleocr_gpu.ipynb",
+        "INSTALL_DEPS": "!python -m pip install paddlepaddle-gpu paddleocr datasets Pillow",
+        "EXTRA_IMPORTS": "from paddleocr import PaddleOCR",
+        "ADAPTER_CODE": '''class PaddleOCRAdapter:
+    def __init__(self, lang: str = "devanagari"):
+        # PaddleOCR introduced 'devanagari' for Indic languages
+        self.ocr = PaddleOCR(use_angle_cls=True, lang=lang, use_gpu=True, show_log=False)
+        
+    def evaluate_sample(self, image: Image) -> str:
+        img_np = np.array(image.convert('RGB'))
+        results = self.ocr.ocr(img_np, cls=True)
+        if not results or not results[0]:
+            return ""
+        text_blocks = [res[1][0] for res in results[0]]
+        return " ".join(text_blocks)
+''',
+        "ADAPTER_INIT": 'PaddleOCRAdapter()'
+    },
+    {
+        "NAME": "Surya",
+        "FILENAME": "surya_gpu.ipynb",
+        "INSTALL_DEPS": "!pip install surya-ocr datasets Pillow",
+        "EXTRA_IMPORTS": '''from surya.ocr import run_ocr
+from surya.model.detection.model import load_model as load_det_model, load_processor as load_det_processor
+from surya.model.recognition.model import load_model as load_rec_model
+from surya.model.recognition.processor import load_processor as load_rec_processor''',
+        "ADAPTER_CODE": '''class SuryaAdapter:
+    def __init__(self, langs: list = ["ne"]):
+        self.langs = langs
+        self.det_processor = load_det_processor()
+        self.det_model = load_det_model()
+        self.rec_model = load_rec_model()
+        self.rec_processor = load_rec_processor()
+        
+    def evaluate_sample(self, image: Image) -> str:
+        predictions = run_ocr(
+            [image.convert('RGB')],
+            [self.langs],
+            self.det_model,
+            self.det_processor,
+            self.rec_model,
+            self.rec_processor
+        )
+        if not predictions or not predictions[0].text_lines:
+            return ""
+        return " ".join([line.text for line in predictions[0].text_lines])
+''',
+        "ADAPTER_INIT": 'SuryaAdapter()'
+    }
+]
+
+import copy
+
+for config in configs:
+    nb = json.dumps(base_notebook)
+    
+    # Simple string replacement for the placeholders inside the JSON structure
+    # Note: we need to replace it carefully. The easiest way is to convert to string, replace, convert back.
+    # Since some replacements might have newlines, we should insert them in a way that respects JSON list of strings format,
+    # OR we can just replace the placeholders in a Python dict before JSON dumping. Let's do that!
+    
+    nb_obj = copy.deepcopy(base_notebook)
+    
+    # 0. Markdown NAME
+    nb_obj["cells"][0]["source"][0] = nb_obj["cells"][0]["source"][0].replace("{NAME}", config["NAME"])
+    nb_obj["cells"][0]["source"][2] = nb_obj["cells"][0]["source"][2].replace("{NAME}", config["NAME"])
+    
+    # 1. Install deps
+    nb_obj["cells"][1]["source"][1] = config["INSTALL_DEPS"]
+    
+    # 2. Extra imports
+    nb_obj["cells"][2]["source"][14] = config["EXTRA_IMPORTS"] + "\\n"
+    
+    # 4. Adapter Code
+    nb_obj["cells"][4]["source"][1] = config["ADAPTER_CODE"] + "\\n"
+    
+    # 5. Name lower in paths
+    nb_obj["cells"][5]["source"][7] = nb_obj["cells"][5]["source"][7].replace("{NAME.lower()}", config["NAME"].lower())
+    nb_obj["cells"][5]["source"][8] = nb_obj["cells"][5]["source"][8].replace("{NAME.lower()}", config["NAME"].lower())
+    
+    # 6. Name lower in helpers
+    nb_obj["cells"][6]["source"][6] = nb_obj["cells"][6]["source"][6].replace("{NAME.lower()}", config["NAME"].lower())
+    
+    # 8. Adapter Init
+    nb_obj["cells"][8]["source"][1] = f"adapter = {config['ADAPTER_INIT']}\\n"
+    
+    # Write file
+    with open(config["FILENAME"], 'w') as f:
+        json.dump(nb_obj, f, indent=1)
+
+print("Generated all 3 notebooks successfully!")
