@@ -1,8 +1,26 @@
 # nepeval-ocr
 
-Standalone project for benchmarking OCR and VLM models against the `himalaya-ai/nepalipixel-synthetic-ocr-benchmark` dataset. 
+Standalone project for benchmarking OCR and VLM models against the `himalaya-ai/nepalipixel-synthetic-ocr-benchmark` dataset.
 
 This project is completely isolated from the main `nepeval` codebase. It evaluates image-in/text-out inference with edit distance metrics (Character Error Rate, Word Error Rate, and Exact-Match).
+
+## Features
+
+- **Multiple Model Support**: Run evaluations with API-based VLMs or locally-hosted OCR models
+- **Unified Interface**: Single script (`run_unified_benchmark.py`) supports all model types
+- **Flexible Hosting**: Choose between cloud APIs or local inference (CPU/GPU)
+- **Nepali Language**: Optimized for Nepali OCR evaluation
+
+## Supported Models
+
+### API Models (Cloud)
+- **Scalabs Tarka** (OpenAI-compatible endpoint)
+- Any OpenAI-compatible API endpoint
+
+### Local Models
+- **Surya OCR**: Auto-spawns vllm (GPU) or llama.cpp (CPU) server
+- **Tesseract**: Classic OCR with Nepali language support
+- **trOCR**: Hugging Face's Transformer-based OCR model for Nepali
 
 ## Setup
 
@@ -10,94 +28,202 @@ This project is completely isolated from the main `nepeval` codebase. It evaluat
 python3 -m venv .venv
 . .venv/bin/activate
 python -m pip install -U pip
-# Default setup installs base dependencies and requires manual OCR engine installation
+# Default setup installs base dependencies
 python -m pip install -e .
 ```
 
-### OCR Engine Dependencies (Optional Extras)
+### Install Model-Specific Dependencies
 
-Because Tesseract, EasyOCR, PaddleOCR, and Hugging Face transformers have conflicting dependencies (e.g. `torch` vs `paddlepaddle`), we've isolated them into optional extras.
+Choose the model(s) you want to use:
 
-For Tesseract:
+| Model | Command | Notes |
+|-------|---------|-------|
+| **Surya** (local, GPU/CPU) | `pip install -e '.[surya]'` | Auto-spawns inference server |
+| **Tesseract** (local) | `pip install -e '.[tesseract]'` | Requires system binary + Nepali lang |
+| **trOCR** (local, HF) | `pip install -e '.[trocr]'` | Uses `syubraj/TrOCR_Nepali` model |
+| **EasyOCR** (local) | `pip install -e '.[easyocr]'` | - |
+| **PaddleOCR** (local) | `pip install -e '.[paddle]'` | - |
+
+## Model Setup Instructions
+
+### For API Models (Scalabs Tarka)
+
+No extra dependencies needed. Just set your API token:
+
 ```bash
-python -m pip install -e '.[tesseract]'
+export TARKA_API_KEY="your_api_key_here"
 ```
 
-You also need the Tesseract binary and the **Nepali trained-data file** (`nep.traineddata`).
+Or use the fallback environment variables:
+- `NEPEVAL_API_TOKEN`
+- `OPENAI_API_KEY`
 
-Install the binary and language pack via your system package manager:
+### For Local Models
+
+#### Surya OCR
 ```bash
-# Debian / Ubuntu
+pip install -e '.[surya]'
+# Surya auto-spawns vllm (GPU) or llama.cpp (CPU) on first use
+```
+
+For CPU-only inference with limited RAM:
+```bash
+# Install llama.cpp server manually
+export SURYA_INFERENCE_URL=http://localhost:8000/v1
+# Then run the benchmark
+```
+
+#### Tesseract
+```bash
+# 1. Install Python package
+pip install -e '.[tesseract]'
+
+# 2. Install system binary and Nepali language data
+# Debian/Ubuntu:
 sudo apt install tesseract-ocr tesseract-ocr-nep
 
-# Arch Linux
+# Arch Linux:
 sudo pacman -S tesseract tesseract-data-nep
+
+# 3. Verify installation
+tesseract --list-langs
 ```
 
-Alternatively, a copy of `nep.traineddata` is bundled in the `tessdata/` directory of this repo.
-Copy it to your system tessdata directory, or point `TESSDATA_PREFIX` at the repo root
-(Tesseract automatically appends `/tessdata/` to the prefix):
+Alternatively, copy the bundled `nep.traineddata` from the repo:
 ```bash
-# Option 1: copy to system tessdata (find the path with `tesseract --list-langs`)
+# Option 1: Copy to system tessdata
 sudo cp tessdata/nep.traineddata /usr/share/tessdata/
 
-# Option 2: use TESSDATA_PREFIX (no sudo needed)
+# Option 2: Use TESSDATA_PREFIX (no sudo needed)
 export TESSDATA_PREFIX="$(pwd)"
 ```
 
-For API VLMs:
-No extra dependencies are needed beyond the base package, as it uses `requests` to call OpenAI-compatible endpoints.
-
-*(EasyOCR, PaddleOCR, and HF Transformers support will use `.[easyocr]`, `.[paddle]`, and `.[hf]` respectively).*
-
-## Materialize / Load Data
-
-The dataset (`himalaya-ai/nepalipixel-synthetic-ocr-benchmark`) is automatically pulled via the Hugging Face `datasets` library during runtime. There is no manual materialization step needed, but the first run will download and cache the images locally.
-
-## Run A Local Model (Tesseract)
-
+#### trOCR
 ```bash
-python scripts/run_tesseract_benchmark.py --limit 100 --output-dir results/tesseract-smoke
+pip install -e '.[trocr]'
+# Model (syubraj/TrOCR_Nepali) downloads on first run from Hugging Face
 ```
 
-## Run API Models (VLMs)
+## Run Evaluations
 
-The OpenAI-compatible runner evaluates any model behind an OpenAI-compatible endpoint using a base64 vision API.
+The unified benchmark script supports all model types with a single interface.
+
+### API Evaluation
 
 ```bash
-export NEPEVAL_API_TOKEN='...'
-export OPENAI_API_KEY='...' # fallback
-python scripts/run_openai_compatible_api_benchmarks.py --limit 100
+export TARKA_API_KEY="your_key"
+python scripts/run_unified_benchmark.py \
+  --model api \
+  --limit 100 \
+  --output-dir results/api-scalabs \
+  --concurrency 8
 ```
 
-By default it uses `https://himalayagpt.api.scalabs.ai/v1`. You can override with `--api-base-url`. 
-Use `--concurrency N` to control API throughput.
+Options:
+- `--api-base-url`: Override API endpoint (default: `https://himalayagpt.api.scalabs.ai/v1`)
+- `--api-token-env`: Custom environment variable name (default: `TARKA_API_KEY`)
+- `--concurrency`: API request parallelism (default: 4)
+- `--timeout`: Request timeout in seconds (default: 300)
+- `--retries`: Number of retry attempts (default: 3)
+
+### Local Model Evaluations
+
+#### Surya (Local)
+```bash
+python scripts/run_unified_benchmark.py \
+  --model surya \
+  --limit 100 \
+  --output-dir results/surya-local \
+  --concurrency 1  # Sequential for local models
+```
+
+#### Tesseract (Local)
+```bash
+python scripts/run_unified_benchmark.py \
+  --model tesseract-nep \
+  --limit 100 \
+  --output-dir results/tesseract-local
+```
+
+#### trOCR (Local)
+```bash
+# Auto-detect GPU or use CPU explicitly
+python scripts/run_unified_benchmark.py \
+  --model trocr \
+  --device auto \  # or: cpu, cuda, mps
+  --limit 100 \
+  --output-dir results/trocr-local
+```
+
+### Common Options (All Models)
+
+- `--limit N`: Number of images to evaluate (default: 1000)
+- `--output-dir PATH`: Custom output directory
+- `--temperature`: API model temperature (default: 0.0)
+
+## Output Structure
 
 Each run generates:
-- `run_config.json`
-- `summary.json`
-- `summary.md`
-- `models/<model>/summary.json`
-- `models/<model>/samples.jsonl` (streamed live)
-- `models/<model>/progress.json`
+
+```
+results/<run-name>/
+├── run_config.json          # Run configuration
+├── summary.json             # Full summary with metrics
+├── summary.md               # Human-readable summary
+└── models/
+    └── <model>/
+        ├── summary.json     # Model-specific metrics
+        ├── samples.jsonl    # Individual predictions (streamed live)
+        └── progress.json    # Current progress status
+```
+
+### Metrics
+
+- **CER** (Character Error Rate): Lower is better
+- **WER** (Word Error Rate): Lower is better  
+- **Exact Match**: Percentage of perfect predictions
+- **Avg Latency**: Time per prediction (seconds)
 
 ## Compare Results
 
-Compare results across models, fonts, levels, and intensities. Pass the directories containing `models/` subdirectories:
+Compare multiple runs across different models:
 
 ```bash
 python scripts/summarize_ocr_results.py \
   --output-prefix results/ocr_comparison \
-  results/<run-dir-1> \
-  results/<run-dir-2>
+  results/api-scalabs \
+  results/surya-local \
+  results/tesseract-local
 ```
 
-This generates `ocr_comparison.md` and `ocr_comparison.json`.
+This generates:
+- `results/ocr_comparison.md` - Human-readable comparison table
+- `results/ocr_comparison.json` - Raw comparison data
+
+## Development
+
+### Adding New Models
+
+1. Create an adapter in `src/nepeval_ocr/adapters/`
+2. Extend `BaseOCRAdapter` and implement `evaluate_sample_with_stats()`
+3. Add a case in `run_unified_benchmark.py::load_adapter()`
+
+### Testing
+
+```bash
+# Run mock tests
+python test_mock_tesseract.py
+```
 
 ## Attribution
 
 This project uses the Nepali Pixel Synthetic OCR Benchmark:
+
 - Dataset: [himalaya-ai/nepalipixel-synthetic-ocr-benchmark](https://huggingface.co/datasets/himalaya-ai/nepalipixel-synthetic-ocr-benchmark)
 - Paper: [Koshur Pixel (arXiv:2606.23144)](https://arxiv.org/abs/2606.23144)
 
 Please cite the dataset and paper when using these evaluation data.
+
+## License
+
+This project is provided as-is for research and evaluation purposes.

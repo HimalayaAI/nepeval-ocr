@@ -31,6 +31,13 @@ hf = [
     "transformers",
     "torch",
 ]
+surya = [
+    "surya-ocr",
+]
+trocr = [
+    "transformers",
+    "torch",
+]
 eval = [
     "pytesseract",
 ]
@@ -38,4 +45,6 @@ eval = [
 [project.scripts]
 nepeval-ocr-tesseract = "scripts.run_tesseract_benchmark:main"
 nepeval-ocr-api = "scripts.run_openai_compatible_api_benchmarks:main"
+nepeval-ocr-surya = "scripts.run_unified_benchmark:main"
+nepeval-ocr-trocr = "scripts.run_unified_benchmark:main"
 nepeval-ocr-summary = "scripts.summarize_ocr_results:main"
